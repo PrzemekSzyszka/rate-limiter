@@ -3,26 +3,21 @@ class Middleware
     @app = app
     @options = options
     @left_requests = {}
-    @block_return = block_given? ? block.call : "Some default value"
-    if block_given?
-      p block.call
-    end
+    @block = block
   end
 
   def call(env)
     if @options[:store].nil?
-      unless @block_return.nil?
-        create_hash_for_addr(env["REMOTE_ADDR"])
-
-        reset_time_and_remaining(env["REMOTE_ADDR"])
-
-        if @left_requests[env["REMOTE_ADDR"]][:remaining] > 0
-          add_headers(env, env["REMOTE_ADDR"])
-        else
-          Rack::MockResponse.new(429, { "Content-Type" => "text-html" }, "Too Many Requests")
-        end
+      if @block.nil?
+        prepare_headers(env, env["REMOTE_ADDR"])
       else
-        @app.call(env)
+        response = @block.call(env)
+
+        if response.nil?
+          @app.call(env)
+        else
+          prepare_headers(env, response)
+        end
       end
     else
       create_dalli_hash_for_addr(env["REMOTE_ADDR"], @options[:store])
@@ -32,6 +27,18 @@ class Middleware
   end
 
   private
+
+  def prepare_headers(env, host_addres)
+    create_hash_for_addr(host_addres)
+
+    reset_time_and_remaining(host_addres)
+
+    if @left_requests[host_addres][:remaining] > 0
+      add_headers(env, host_addres)
+    else
+      Rack::MockResponse.new(429, { "Content-Type" => "text-html" }, "Too Many Requests")
+    end
+  end
 
   def create_hash_for_addr(remote_addr)
     unless @left_requests.has_key?(remote_addr)
