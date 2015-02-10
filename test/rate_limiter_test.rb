@@ -10,7 +10,11 @@ class RateLimiterTest < Minitest::Test
   include Rack::Test::Methods
 
   def app
-    @middleware = Middleware.new(RateLimiter.new, { limit: 60, reset_in: 3600 })
+    @middleware ||= Middleware.new(RateLimiter.new, { limit: 60, reset_in: 3600 })
+  end
+
+  def teardown
+    @middleware = nil
   end
 
   def test_app_returns_an_response
@@ -74,6 +78,25 @@ class RateLimiterTest < Minitest::Test
     get "/", {}, "REMOTE_ADDR" => "10.0.0.2"
 
     assert_equal 59, last_response.header["X-RateLimit-Remaining"]
+  end
+
+  def test_no_rate_limiting_header_when_block_returns_nil
+    @middleware = Middleware.new(RateLimiter.new, { limit: 60, reset_in: 3600 }) { |env| Rack::Request.new(env).params["api_token"] }
+    get "/"
+    assert_equal nil, last_response.header["X-RateLimit-Remaining"]
+  end
+
+  def test_different_rate_limits_are_decresed_for_different_api_tokens
+    @middleware = Middleware.new(RateLimiter.new, { limit: 60, reset_in: 3600 }) { |env| Rack::Request.new(env).params["api_token"] }
+
+    get "/", { "api_token" => "api-token-1" }
+    assert_equal 59, last_response.header["X-RateLimit-Remaining"]
+
+    get "/", { "api_token" => "api-token-2" }
+    assert_equal 59, last_response.header["X-RateLimit-Remaining"]
+
+    get "/", { "api_token" => "api-token-1" }
+    assert_equal 58, last_response.header["X-RateLimit-Remaining"]
   end
 
   def test_number_of_rate_limit_remaining_using_memcache_client
