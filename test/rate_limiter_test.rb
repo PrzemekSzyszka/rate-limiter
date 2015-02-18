@@ -1,11 +1,8 @@
-require "rubygems"
 require "rack/test"
 require "timecop"
-require "dalli"
 require "minitest/autorun"
 require "./lib/rate-limiter.rb"
 require "./lib/rate-limiter/app.rb"
-require "./lib/rate-limiter/store.rb"
 
 class RateLimiterTest < Minitest::Test
   include Rack::Test::Methods
