@@ -22,7 +22,7 @@ class Middleware
     else
       create_dalli_hash_for_addr(env["REMOTE_ADDR"], @options[:store])
       reset_dalli_time_and_remaining(env["REMOTE_ADDR"], @options[:store])
-      reset_dalli_time_and_remaining
+      add_dalli_headers(env, env["REMOTE_ADDR"], @options[:store])
     end
   end
 
@@ -48,11 +48,9 @@ class Middleware
     end
   end
 
-  def create_dalli_hash_for_addr(remote_addr, client)
-    unless client.get(remote_addr).nil?
-      client.set(remote_addr, {})
-      client.set(remote_addr[:remaining], @options[:limit])
-      client.set(remote_addr[:reset_at], Time.now + @options[:reset_in])
+  def create_dalli_hash_for_addr(remote_addr, store)
+    if store.get(remote_addr).nil?
+      store.set(remote_addr, { remaining: @options[:limit], reset_at: Time.now + @options[:reset_in] })
     end
   end
 
@@ -63,28 +61,32 @@ class Middleware
     end
   end
 
-  def reset_dalli_time_and_remaining(remote_addr, client)
-    if client.get(remote_addr)[:reset_at] - Time.now < 0
-      client.get(remote_addr)[:remaining] = @options[:limit]
-      client.get(remote_addr)[:reset_at] += @options[:reset_in]
+  def reset_dalli_time_and_remaining(remote_addr, store)
+    client = store.get(remote_addr)
+    if client[:reset_at] - Time.now < 0
+      client[:remaining] = @options[:limit]
+      client[:reset_at] += @options[:reset_in]
+      store.set(remote_addr, store)
     end
   end
 
   def add_headers(env, remote_addr)
     @left_requests[remote_addr][:remaining] -= 1
-    response = @app.call(env)
-    response[1]["X-RateLimit-Limit"]     = @options[:limit]
-    response[1]["X-RateLimit-Remaining"] = @left_requests[remote_addr][:remaining]
-    response[1]["X-RateLimit-Reset"]     = @left_requests[remote_addr][:reset_at]
-    response
+    create_response(env, @options[:limit], @left_requests[remote_addr][:remaining], @left_requests[remote_addr][:reset_at])
   end
 
-  def add_dalli_headers(env, remote_addr, client)
-    client.set(remote_addr[:remaining], client.get(remote_addr[:remaining]) - 1)
+  def add_dalli_headers(env, remote_addr, store)
+    client = store.get(remote_addr)
+    client[:remaining] = client[:remaining] - 1
+    store.set(remote_addr, client)
+    create_response(env, @options[:limit], client[:remaining], client[:reset_at])
+  end
+
+  def create_response(env, limit, remaining, reset_at)
     response = @app.call(env)
-    response[1]["X-RateLimit-Limit"]     = @options[:limit]
-    response[1]["X-RateLimit-Remaining"] = client.get(remote_addr[:remaining])
-    response[1]["X-RateLimit-Reset"]     = client.get(remote_addr[:reset_at])
+    response[1]["X-RateLimit-Limit"]     = limit
+    response[1]["X-RateLimit-Remaining"] = remaining
+    response[1]["X-RateLimit-Reset"]     = reset_at
     response
   end
 end
