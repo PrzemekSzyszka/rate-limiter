@@ -22,6 +22,4 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rack-test', "~> 0.6.3"
   spec.add_development_dependency "minitest",  "~> 5.5.1"
   spec.add_development_dependency "timecop",   "~> 0.7.1"
-  spec.add_development_dependency "dalli",     "~> 2.7.2"
-  spec.add_development_dependency "memcached", "~> 1.4.6"
 end
