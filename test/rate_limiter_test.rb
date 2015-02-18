@@ -5,6 +5,7 @@ require "dalli"
 require "minitest/autorun"
 require "./lib/rate-limiter.rb"
 require "./lib/rate-limiter/middleware.rb"
+require "./lib/rate-limiter/store.rb"
 
 class RateLimiterTest < Minitest::Test
   include Rack::Test::Methods
@@ -100,10 +101,13 @@ class RateLimiterTest < Minitest::Test
   end
 
   def test_number_of_rate_limit_remaining_using_memcache_client
-    skip "problems with dalli client"
-    options = { :namespace => "app_v1", :compress => true }
-    dc = Dalli::Client.new('localhost:3000', options)
-    dc.set('abc', 123)
-    value = dc.get('abc')
+    @middleware = Middleware.new(RateLimiter.new, { limit: 60, reset_in: 3600, store: Store.new })
+    get "/", {}, "REMOTE_ADDR" => "10.0.0.1"
+
+    assert_equal 59, last_response.header["X-RateLimit-Remaining"]
+
+    get "/", {}, "REMOTE_ADDR" => "10.0.0.2"
+
+    assert_equal 59, last_response.header["X-RateLimit-Remaining"]
   end
 end
