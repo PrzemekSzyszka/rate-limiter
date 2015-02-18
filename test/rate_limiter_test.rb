@@ -100,7 +100,7 @@ class RateLimiterTest < Minitest::Test
     assert_equal 58, last_response.header["X-RateLimit-Remaining"]
   end
 
-  def test_number_of_rate_limit_remaining_using_memcache_client
+  def test_number_of_rate_limit_remaining_using_store
     @middleware = Middleware.new(RateLimiter.new, { limit: 60, reset_in: 3600, store: Store.new })
     get "/", {}, "REMOTE_ADDR" => "10.0.0.1"
 
